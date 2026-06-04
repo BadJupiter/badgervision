@@ -157,6 +157,20 @@ function applyCustomerFilter() {
 function renderFleetTable(machines) {
   const tbody = document.getElementById('fleet-tbody');
   document.getElementById('table-count').textContent = machines.length;
+
+  // Mobile list
+  document.getElementById('fleet-mobile-list').innerHTML = machines.map(m => `
+    <div class="fleet-mobile-item" onclick="showPage('detail','${m.jp_machine_id}')">
+      <div class="fmi-main">
+        <div class="fmi-location">${m.location_name}</div>
+        <div class="fmi-meta">${m.city}, ${m.state} · ${m.genset_make} ${m.genset_kw} kW</div>
+      </div>
+      <div class="fmi-right">
+        <span class="machine-id">${m.jp_machine_id}</span>
+        <span class="fmi-reports">${m.service_report_count} report${m.service_report_count !== 1 ? 's' : ''}</span>
+      </div>
+    </div>
+  `).join('');
   tbody.innerHTML = machines.map(m => `
     <tr onclick="showPage('detail','${m.jp_machine_id}')">
       <td><span class="machine-id">${m.jp_machine_id}</span></td>

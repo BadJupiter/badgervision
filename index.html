@@ -118,15 +118,17 @@
         </div>
       </div>
 
-      <!-- Fleet Table -->
+      <!-- Fleet Table (desktop) / Fleet List (mobile) -->
       <div class="card">
         <div class="table-toolbar">
           <h2 id="table-heading">All Machines</h2>
           <span class="toolbar-count" id="table-count">42</span>
           <div class="toolbar-spacer"></div>
-          <input class="toolbar-input" type="text" placeholder="Filter table…" id="table-filter" oninput="filterTable()">
+          <input class="toolbar-input" type="text" placeholder="Filter…" id="table-filter" oninput="filterTable()">
         </div>
-        <table class="data-table" id="fleet-table">
+
+        <!-- Desktop table -->
+        <table class="data-table fleet-desktop" id="fleet-table">
           <thead>
             <tr>
               <th>Machine ID <span class="sort-icon">↕</span></th>
@@ -141,9 +143,12 @@
               <th></th>
             </tr>
           </thead>
-          <tbody id="fleet-tbody">
-          </tbody>
+          <tbody id="fleet-tbody"></tbody>
         </table>
+
+        <!-- Mobile list -->
+        <div class="fleet-mobile" id="fleet-mobile-list"></div>
+
         <div class="table-pagination">
           Showing 1–15 of 42 machines
           <div style="margin-left:auto; display:flex; gap:6px;">
