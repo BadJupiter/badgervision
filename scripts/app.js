@@ -1,36 +1,131 @@
 /* ═══════════════════════════════════════════
+   APP INIT
+════════════════════════════════════════════ */
+const IPS_BIZ_ID   = 'ips';
+const IPS_APP_TOKEN = 'ips-dashboard';
+
+function showScreen(name, loadingMsg) {
+  document.getElementById('screen-loading').style.display = name === 'loading' ? 'flex' : 'none';
+  document.getElementById('screen-login').style.display   = name === 'login'   ? 'flex' : 'none';
+  document.getElementById('app-shell').style.display      = name === 'app'     ? 'flex' : 'none';
+  if (name === 'loading' && loadingMsg) {
+    document.getElementById('loading-label').textContent = loadingMsg;
+  }
+}
+
+window.addEventListener('load', async () => {
+  // Start on loading screen — don't flash login if we have a valid cookie
+  showScreen('loading', 'Checking credentials…');
+
+  await j2AuthInit(IPS_BIZ_ID, IPS_APP_TOKEN);
+
+  if (isAuthenticated && hasIPSAccess()) {
+    await enterApp();
+  } else {
+    showScreen('login');
+  }
+});
+
+/* ═══════════════════════════════════════════
    LOGIN FLOW
 ════════════════════════════════════════════ */
+function formatPhone(input) {
+  // Strip everything except digits
+  let digits = input.value.replace(/\D/g, '');
+
+  // Drop leading 1 for formatting (we'll add +1 prefix)
+  if (digits.startsWith('1')) digits = digits.slice(1);
+  digits = digits.slice(0, 10);
+
+  let formatted = '';
+  if (digits.length === 0) {
+    formatted = '';
+  } else if (digits.length <= 3) {
+    formatted = `+1 (${digits}`;
+  } else if (digits.length <= 6) {
+    formatted = `+1 (${digits.slice(0,3)}) ${digits.slice(3)}`;
+  } else {
+    formatted = `+1 (${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
+  }
+
+  input.value = formatted;
+}
+
 function sendOTP() {
+  clearLoginError();
   const phone = document.getElementById('phone-input').value.trim();
   if (!phone) { document.getElementById('phone-input').focus(); return; }
-  document.getElementById('login-step1').style.display = 'none';
-  document.getElementById('btn-send-otp').style.display = 'none';
-  document.getElementById('login-step2').style.display = 'block';
-  document.getElementById('btn-verify-otp').classList.remove('hidden');
-  document.getElementById('otp0').focus();
+
+  const btn = document.getElementById('btn-send-otp');
+  btn.disabled = true;
+  btn.textContent = 'SENDING…';
+
+  requestAuthenticationCode(phone, IPS_BIZ_ID).then(code => {
+    btn.disabled = false;
+    btn.textContent = 'Send Verification Code';
+    if (!code) {
+      alert('Could not send verification code. Please try again.');
+      return;
+    }
+    document.getElementById('login-step1').style.display = 'none';
+    document.getElementById('btn-send-otp').style.display = 'none';
+    document.getElementById('login-step2').style.display = 'block';
+    document.getElementById('btn-verify-otp').classList.remove('hidden');
+    document.getElementById('otp-hint').textContent = `Code sent to ${phone}. Check your texts.`;
+    document.getElementById('otp0').focus();
+  });
 }
 
 function otpNext(idx) {
   const val = document.getElementById('otp' + idx).value;
-  if (val.length === 1 && idx < 5) {
+  if (val.length === 1 && idx < 3) {
     document.getElementById('otp' + (idx + 1)).focus();
   }
-  const allFilled = [0,1,2,3,4,5].every(i => document.getElementById('otp' + i).value.length === 1);
+  const allFilled = [0,1,2,3].every(i => document.getElementById('otp' + i).value.length === 1);
   if (allFilled) verifyOTP();
+}
+
+function otpBack(event, idx) {
+  if (event.key === 'Backspace' && !document.getElementById('otp' + idx).value && idx > 0) {
+    document.getElementById('otp' + (idx - 1)).focus();
+  }
 }
 
 async function verifyOTP() {
   const btn = document.getElementById('btn-verify-otp');
   btn.disabled = true;
-  btn.textContent = 'LOADING…';
+  btn.textContent = 'VERIFYING…';
 
-  const ok = await loadFleetData();
+  const code = [0,1,2,3].map(i => document.getElementById('otp' + i).value).join('');
+  const ok = await verifyAuthenticationCode(code);
 
   if (!ok) {
     btn.disabled = false;
     btn.textContent = 'Verify & Sign In';
-    alert('Could not reach the server. Please try again.');
+    [0,1,2,3].forEach(i => { document.getElementById('otp' + i).value = ''; });
+    document.getElementById('otp0').focus();
+    showLoginError('Incorrect code. Please try again.');
+    return;
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Verify & Sign In';
+
+  if (!hasIPSAccess()) {
+    showScreen('login');
+    showLoginError('Your account does not have access to Badger Vision. Contact your administrator.');
+    return;
+  }
+
+  await enterApp();
+}
+
+async function enterApp() {
+  showScreen('loading', 'Loading fleet data…');
+  const ok = await loadFleetData();
+  if (!ok) {
+    showScreen('login');
+    showLoginError('Could not load fleet data. Check your connection and try again.');
     return;
   }
 
@@ -38,24 +133,43 @@ async function verifyOTP() {
   MACHINES.forEach(m => { if (m.customer_id) CUSTOMER_NAMES[m.customer_id] = m.customer_name; });
   populateCustomerPicker();
 
-  document.getElementById('screen-login').style.display = 'none';
-  document.getElementById('app-shell').style.display = 'flex';
-  btn.disabled = false;
-  btn.textContent = 'Verify & Sign In';
-  // Replace the login URL in history so back-from-overview doesn't return to login.
+  // Show display name if available
+  const name = userProfile?.user?.name || userProfile?.user?.mobile || '';
+  if (name) document.getElementById('topnav-username').textContent = name;
+
+  showScreen('app');
   history.replaceState({ page: 'overview', machineId: null }, '', '?page=overview');
   _applyPage('overview');
 }
 
+function hasIPSAccess() {
+  const roles = userProfile?.biz_roles || [];
+  return roles.includes('admin');
+}
+
+function showLoginError(msg) {
+  const el = document.getElementById('login-error');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
+function clearLoginError() {
+  document.getElementById('login-error').classList.add('hidden');
+}
+
 function signOut() {
-  document.getElementById('screen-login').style.display = 'flex';
-  document.getElementById('app-shell').style.display = 'none';
+  // Clear the device cookie
+  document.cookie = 'jupiterDeviceID=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/';
+  isAuthenticated = false;
+
+  showScreen('login');
   document.getElementById('login-step1').style.display = '';
   document.getElementById('btn-send-otp').style.display = '';
   document.getElementById('login-step2').style.display = 'none';
   document.getElementById('btn-verify-otp').classList.add('hidden');
   document.getElementById('phone-input').value = '';
-  [0,1,2,3,4,5].forEach(i => document.getElementById('otp' + i).value = '');
+  [0,1,2,3].forEach(i => document.getElementById('otp' + i).value = '');
+  history.replaceState({}, '', '/');
 }
 
 /* ═══════════════════════════════════════════

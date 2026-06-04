@@ -12,9 +12,18 @@
 <body>
 
 <!-- ═══════════════════════════════════════════
+     LOADING SCREEN
+════════════════════════════════════════════ -->
+<div id="screen-loading">
+  <img src="IPS logo_transparent.png" alt="Invicta Power Services" class="loading-logo">
+  <div class="loading-spinner"></div>
+  <div class="loading-label" id="loading-label">Loading…</div>
+</div>
+
+<!-- ═══════════════════════════════════════════
      LOGIN SCREEN
 ════════════════════════════════════════════ -->
-<div id="screen-login">
+<div id="screen-login" style="display:none">
   <!-- Hero: logo + product name + subtitle -->
   <div class="login-hero">
     <img src="IPS logo_transparent.png" alt="Invicta Power Services" class="login-hero-logo">
@@ -30,25 +39,25 @@
     <!-- Step 1: Phone -->
     <div class="login-step" id="login-step1">
       <label>Mobile Number</label>
-      <input type="tel" id="phone-input" placeholder="+1 (555) 000-0000" autocomplete="tel">
+      <input type="tel" id="phone-input" placeholder="+1 (555) 000-0000" autocomplete="tel"
+             oninput="formatPhone(this)" onkeydown="if(event.key==='Enter'){sendOTP()}">
       <div class="login-hint">Enter the mobile number associated with your account.</div>
     </div>
     <button class="btn-primary" id="btn-send-otp" onclick="sendOTP()">Send Verification Code</button>
 
-    <!-- Step 2: OTP -->
+    <!-- Step 2: OTP (4-digit) -->
     <div class="login-step login-step2" id="login-step2">
       <label>Verification Code</label>
       <div class="otp-row">
-        <input type="text" maxlength="1" class="otp-digit" id="otp0" oninput="otpNext(0)">
-        <input type="text" maxlength="1" class="otp-digit" id="otp1" oninput="otpNext(1)">
-        <input type="text" maxlength="1" class="otp-digit" id="otp2" oninput="otpNext(2)">
-        <input type="text" maxlength="1" class="otp-digit" id="otp3" oninput="otpNext(3)">
-        <input type="text" maxlength="1" class="otp-digit" id="otp4" oninput="otpNext(4)">
-        <input type="text" maxlength="1" class="otp-digit" id="otp5" oninput="otpNext(5)">
+        <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp-digit" id="otp0" oninput="otpNext(0)" onkeydown="otpBack(event,0)">
+        <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp-digit" id="otp1" oninput="otpNext(1)" onkeydown="otpBack(event,1)">
+        <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp-digit" id="otp2" oninput="otpNext(2)" onkeydown="otpBack(event,2)">
+        <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp-digit" id="otp3" oninput="otpNext(3)" onkeydown="otpBack(event,3)">
       </div>
-      <div class="login-hint">Code sent to your mobile number.</div>
+      <div class="login-hint" id="otp-hint">A 4-digit code was sent to your mobile number.</div>
     </div>
     <button class="btn-primary hidden" id="btn-verify-otp" onclick="verifyOTP()">Verify &amp; Sign In</button>
+    <div class="login-error hidden" id="login-error"></div>
   </div>
 </div>
 
@@ -69,7 +78,7 @@
     </div>
     <div class="topnav-right">
       <div class="topnav-user">
-        Bryan
+        <span id="topnav-username"></span>
         <span class="role-badge">Admin</span>
       </div>
       <div class="topnav-signout" onclick="signOut()">Sign Out</div>
@@ -322,6 +331,7 @@
   </div>
 </div>
 
+<script src="j2auth.js"></script>
 <script src="scripts/data.js"></script>
 <script src="scripts/app.js"></script>
 </body>

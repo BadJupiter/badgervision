@@ -83,7 +83,9 @@ function transformAPIResponse(data) {
 async function loadFleetData() {
   await loadLocalConfig();
   try {
-    const res = await fetch(API_BASE);
+    const headers = {};
+    if (typeof userToken !== 'undefined' && userToken) headers['X-User-Token'] = userToken;
+    const res = await fetch(API_BASE, { headers });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     const { machines, reports } = transformAPIResponse(data);
