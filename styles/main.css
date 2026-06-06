@@ -1227,6 +1227,30 @@ html, body {
 
 .pdf-close-btn:hover { background: rgba(255,255,255,0.15); }
 
+.pdf-download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 4px;
+  color: rgba(255,255,255,0.75);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-decoration: none;
+  text-transform: uppercase;
+  transition: background .15s, color .15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.pdf-download-btn:hover {
+  background: rgba(255,255,255,0.14);
+  color: var(--white);
+}
+
 .pdf-iframe-wrap {
   flex: 1;
   background: #525659;

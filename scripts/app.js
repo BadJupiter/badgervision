@@ -476,12 +476,10 @@ function renderMachineDetail(machineId) {
           <span class="date-text">${r.date_str ? fmtDisplayDate(r.date_str) : '—'}</span>
         </div>
         <div class="report-sub">${r.description}</div>
-        <a class="view-pdf-btn"
-           href="https://drive.google.com/file/d/${r.file_id}/view"
-           target="_blank" rel="noopener"
-           onclick="event.stopPropagation()">
+        <button class="view-pdf-btn"
+           onclick="event.stopPropagation(); openPDF('${r.file_id}', '${(r.description || '').replace(/'/g, "\\'")}', '${r.date_str || ''}')">
           <span>📄</span> View PDF
-        </a>
+        </button>
       </div>
     </div>
   `).join('');
@@ -526,26 +524,32 @@ function fmtDisplayDate(str) {
 /* ═══════════════════════════════════════════
    PDF MODAL
 ════════════════════════════════════════════ */
-function openPDF(url, title, sub) {
+function pdfProxyURL(fileId, download = false) {
+  const base = `${API_BASE.replace('/ips/dashboard', '')}/ips/report-pdf`;
+  const params = new URLSearchParams({ file_id: fileId, user_token: userToken || '' });
+  if (download) params.set('download', 'true');
+  return `${base}?${params}`;
+}
+
+function openPDF(fileId, title, datStr) {
   document.getElementById('pdf-modal-title').textContent = title;
-  document.getElementById('pdf-modal-meta').textContent = sub;
+  document.getElementById('pdf-modal-meta').textContent = datStr ? fmtDisplayDate(datStr) : '';
+
+  // Download button — streams file via server proxy, triggers browser download
+  const dlBtn = document.getElementById('pdf-download-btn');
+  dlBtn.href = pdfProxyURL(fileId, true);
+
+  // Inline embed — same proxy, inline disposition so browser renders it
   const wrap = document.getElementById('pdf-iframe-wrap');
-  wrap.innerHTML = `
-    <div class="pdf-placeholder">
-      <span class="pdf-icon">📄</span>
-      <p>${title}</p>
-      <p style="font-size:12px;color:rgba(255,255,255,0.35);margin-bottom:10px">${sub}</p>
-      <div class="pdf-url">${url}</div>
-      <div style="margin-top:20px;font-size:12px;color:rgba(255,255,255,0.2)">
-        Static mockup — PDF viewer renders signed URL via &lt;iframe&gt; in production
-      </div>
-    </div>`;
+  wrap.innerHTML = `<iframe src="${pdfProxyURL(fileId)}" title="${title}"></iframe>`;
+
   document.getElementById('pdf-modal').classList.remove('hidden');
   document.addEventListener('keydown', handlePDFKey);
 }
 
 function closePDF() {
   document.getElementById('pdf-modal').classList.add('hidden');
+  document.getElementById('pdf-iframe-wrap').innerHTML = ''; // stop the iframe loading
   document.removeEventListener('keydown', handlePDFKey);
 }
 
