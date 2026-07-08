@@ -550,7 +550,7 @@ function renderMachineDetail(machineId) {
   ]);
 
   document.getElementById('rows-battery').innerHTML = infoRows([
-    ['Size', m.battery_size || '—']
+    ['Date', m.battery_size || '—']
   ]);
 
   const c = m.contacts || {};
