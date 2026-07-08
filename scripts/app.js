@@ -238,32 +238,38 @@ function populateCustomerPicker() {
 
 const RECENT_CUTOFF_DAYS = 30;
 
-let showUnactivated = true;
+let statFilter = 'all'; // 'all' | 'activated' | 'reports' | 'recent'
 
 function applyCustomerFilter() {
   const custId = document.getElementById('customer-picker').value;
   scopedMachines = custId ? MACHINES.filter(m => m.customer_id === custId) : MACHINES;
 
-  const activated  = scopedMachines.filter(m => m.activated !== false);
-  const total      = activated.length;
-  const verified   = activated.filter(m => m.has_verified_specs).length;
+  const activated   = scopedMachines.filter(m => m.activated !== false);
+  const total       = scopedMachines.length;
+  const activatedCount = activated.length;
+  const unactivatedCount = scopedMachines.length - activatedCount;
   const withReports = activated.filter(m => m.service_report_count > 0).length;
-  const cutoff     = new Date(); cutoff.setDate(cutoff.getDate() - RECENT_CUTOFF_DAYS);
-  const recent     = activated.filter(m => m.last_service_date && new Date(m.last_service_date) >= cutoff).length;
-  const pending    = total - verified;
+  const cutoff      = new Date(); cutoff.setDate(cutoff.getDate() - RECENT_CUTOFF_DAYS);
+  const recentIds   = new Set(
+    Object.values(SERVICE_REPORTS)
+      .flat()
+      .filter(r => r.date_str && new Date(r.date_str) >= cutoff)
+      .map(r => r.file_id)
+  );
+  const recent      = recentIds.size;
 
   document.getElementById('stat-total').textContent      = total;
-  document.getElementById('stat-verified').textContent   = verified;
+  document.getElementById('stat-verified').textContent   = activatedCount;
   document.getElementById('stat-reports').textContent    = withReports;
   document.getElementById('stat-recent').textContent     = recent;
 
   if (custId) {
     document.getElementById('stat-total-meta').textContent    = CUSTOMER_NAMES[custId];
-    document.getElementById('stat-verified-meta').textContent = pending + ' pending verification';
+    document.getElementById('stat-verified-meta').textContent = unactivatedCount + ' pending activation';
   } else {
-    const custCount = new Set(activated.map(m => m.customer_id)).size;
+    const custCount = new Set(scopedMachines.map(m => m.customer_id)).size;
     document.getElementById('stat-total-meta').textContent    = 'Across ' + custCount + ' customer accounts';
-    document.getElementById('stat-verified-meta').textContent = pending + ' pending verification';
+    document.getElementById('stat-verified-meta').textContent = unactivatedCount + ' pending activation';
   }
 
   document.getElementById('table-heading').textContent = custId
@@ -272,14 +278,13 @@ function applyCustomerFilter() {
 
   document.getElementById('table-filter').value = '';
   filteredMachines = scopedMachines;
+  statFilter = 'all';
   currentPage = 1;
   renderFleetTable();
 }
 
-function toggleUnactivated() {
-  showUnactivated = !showUnactivated;
-  const btn = document.getElementById('btn-toggle-unactivated');
-  btn.textContent = showUnactivated ? 'Hide Unactivated' : 'Show Unactivated';
+function setStatFilter(f) {
+  statFilter = statFilter === f ? 'all' : f; // click active tile to clear
   currentPage = 1;
   renderFleetTable();
 }
@@ -295,17 +300,30 @@ function renderFleetTable() {
   const activated   = machines.filter(m => m.activated !== false);
   const unactivated = machines.filter(m => m.activated === false);
 
-  document.getElementById('table-count').textContent = activated.length +
-    (unactivated.length ? ` + ${unactivated.length} pending` : '');
+  // Apply stat card filter
+  const cutoffStat = new Date(); cutoffStat.setDate(cutoffStat.getDate() - RECENT_CUTOFF_DAYS);
+  const recentMachineIds = new Set(
+    Object.entries(SERVICE_REPORTS)
+      .filter(([, reports]) => reports.some(r => r.date_str && new Date(r.date_str) >= cutoffStat))
+      .map(([id]) => id)
+  );
+  let visibleActivated = activated;
+  let visibleUnactivated = statFilter === 'all' ? unactivated : [];
+  if (statFilter === 'activated') visibleActivated = activated;
+  if (statFilter === 'reports')   visibleActivated = activated.filter(m => m.service_report_count > 0);
+  if (statFilter === 'recent')    visibleActivated = activated.filter(m => recentMachineIds.has(m.jp_machine_id));
 
-  const unactivatedToggleEl = document.getElementById('btn-toggle-unactivated');
-  if (unactivatedToggleEl) {
-    unactivatedToggleEl.style.display = unactivated.length ? '' : 'none';
-    unactivatedToggleEl.textContent = showUnactivated ? 'Hide Unactivated' : 'Show Unactivated';
-  }
+  // Highlight active stat card
+  ['stat-card-all', 'stat-card-activated', 'stat-card-reports', 'stat-card-recent'].forEach(id => {
+    document.getElementById(id)?.classList.remove('stat-card-active');
+  });
+  if (statFilter !== 'all') document.getElementById('stat-card-' + statFilter)?.classList.add('stat-card-active');
 
-  // Build the full ordered list (activated first, then unactivated if shown)
-  const allRows = [...activated, ...(showUnactivated ? unactivated : [])];
+  document.getElementById('table-count').textContent = visibleActivated.length +
+    (visibleUnactivated.length ? ` + ${visibleUnactivated.length} pending` : '');
+
+  // Build the full ordered list
+  const allRows = [...visibleActivated, ...visibleUnactivated];
   const totalPages = Math.max(1, Math.ceil(allRows.length / PAGE_SIZE));
   if (currentPage > totalPages) currentPage = totalPages;
   const pageRows = allRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);

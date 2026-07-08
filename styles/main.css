@@ -426,6 +426,12 @@ html, body {
 .stat-card.accent { border-left-color: var(--amber); }
 .stat-card.green  { border-left-color: var(--green); }
 
+.stat-card { cursor: pointer; transition: box-shadow .15s, transform .1s; }
+.stat-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.13); transform: translateY(-1px); }
+.stat-card.stat-card-active { box-shadow: 0 0 0 2px var(--navy), 0 4px 16px rgba(0,0,0,0.13); }
+.stat-card.green.stat-card-active  { box-shadow: 0 0 0 2px var(--green), 0 4px 16px rgba(0,0,0,0.13); }
+.stat-card.accent.stat-card-active { box-shadow: 0 0 0 2px var(--amber), 0 4px 16px rgba(0,0,0,0.13); }
+
 .stat-label {
   font-size: 11px;
   font-weight: 600;

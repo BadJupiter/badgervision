@@ -105,22 +105,22 @@
 
       <!-- Stat Cards -->
       <div class="stat-row">
-        <div class="stat-card">
+        <div class="stat-card" id="stat-card-all" onclick="setStatFilter('all')">
           <div class="stat-label">Machines Under Management</div>
           <div class="stat-value" id="stat-total">42</div>
           <div class="stat-meta" id="stat-total-meta">Across 3 customer accounts</div>
         </div>
-        <div class="stat-card green">
-          <div class="stat-label">Specs Verified</div>
+        <div class="stat-card green" id="stat-card-activated" onclick="setStatFilter('activated')">
+          <div class="stat-label">Machines Activated</div>
           <div class="stat-value" id="stat-verified">38</div>
-          <div class="stat-meta" id="stat-verified-meta">4 pending verification</div>
+          <div class="stat-meta" id="stat-verified-meta">4 pending activation</div>
         </div>
-        <div class="stat-card accent">
+        <div class="stat-card accent" id="stat-card-reports" onclick="setStatFilter('reports')">
           <div class="stat-label">Service Reports on File</div>
           <div class="stat-value" id="stat-reports">35</div>
           <div class="stat-meta" id="stat-reports-meta">Machines with at least 1 report</div>
         </div>
-        <div class="stat-card">
+        <div class="stat-card" id="stat-card-recent" onclick="setStatFilter('recent')">
           <div class="stat-label">Reports (Last 30 Days)</div>
           <div class="stat-value" id="stat-recent">7</div>
           <div class="stat-meta">Recent service activity</div>
@@ -133,8 +133,7 @@
           <h2 id="table-heading">All Machines</h2>
           <span class="toolbar-count" id="table-count">42</span>
           <div class="toolbar-spacer"></div>
-          <button class="btn-toggle-unactivated" id="btn-toggle-unactivated" onclick="toggleUnactivated()" style="display:none">Hide Unactivated</button>
-          <input class="toolbar-input" type="text" placeholder="Filter…" id="table-filter" oninput="filterTable()">
+<input class="toolbar-input" type="text" placeholder="Filter…" id="table-filter" oninput="filterTable()">
         </div>
 
         <!-- Desktop table -->
