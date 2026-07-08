@@ -133,6 +133,7 @@
           <h2 id="table-heading">All Machines</h2>
           <span class="toolbar-count" id="table-count">42</span>
           <div class="toolbar-spacer"></div>
+          <button class="btn-toggle-unactivated" id="btn-toggle-unactivated" onclick="toggleUnactivated()" style="display:none">Hide Unactivated</button>
           <input class="toolbar-input" type="text" placeholder="Filter…" id="table-filter" oninput="filterTable()">
         </div>
 
@@ -159,13 +160,8 @@
         <div class="fleet-mobile" id="fleet-mobile-list"></div>
 
         <div class="table-pagination">
-          Showing 1–15 of 42 machines
-          <div style="margin-left:auto; display:flex; gap:6px;">
-            <button class="page-btn active">1</button>
-            <button class="page-btn">2</button>
-            <button class="page-btn">3</button>
-            <button class="page-btn">›</button>
-          </div>
+          <span id="pagination-label"></span>
+          <div style="margin-left:auto; display:flex; gap:6px;" id="pagination-btns"></div>
         </div>
       </div>
     </div><!-- /overview -->

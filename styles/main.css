@@ -605,9 +605,13 @@ html, body {
   transition: border-color .15s, color .15s;
 }
 
-.page-btn:hover, .page-btn.active {
+.page-btn:hover:not(:disabled), .page-btn.active {
   border-color: var(--navy);
   color: var(--navy);
+}
+.page-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 /* ══════════════════════════════════════════
@@ -1526,3 +1530,44 @@ html, body {
     border-radius: 4px;
   }
 }
+
+/* ── Unactivated units ── */
+.unactivated-row {
+  opacity: 0.55;
+  cursor: default;
+  pointer-events: none;
+}
+.unactivated-row:hover { background: none; }
+.unactivated-id {
+  color: var(--gray4);
+  background: var(--gray2);
+}
+.unactivated-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--amber2);
+  background: #fff3e8;
+  border: 1px solid #f5c396;
+  border-radius: 4px;
+  padding: 2px 7px;
+}
+.fleet-mobile-item.unactivated {
+  opacity: 0.55;
+  cursor: default;
+  pointer-events: none;
+}
+.btn-toggle-unactivated {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gray4);
+  background: var(--gray1);
+  border: 1px solid var(--gray2);
+  border-radius: var(--radius);
+  padding: 6px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-toggle-unactivated:hover { border-color: var(--gray3); color: var(--gray5); }

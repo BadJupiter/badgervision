@@ -74,6 +74,21 @@ function transformAPIResponse(data) {
           reports[displayId] = unitData.reports;
         }
       }
+
+      for (const unact of (locData.unactivated_units || [])) {
+        machines.push({
+          activated:       false,
+          slug:            unact.slug,
+          jp_machine_id:   unact.slug,
+          location_name:   locData.name,
+          address_1:       locData.addr1,
+          city:            locData.city,
+          state:           (locData.state || '').trim(),
+          zip:             locData.zip,
+          customer_name:   custData.name,
+          customer_id:     custId,
+        });
+      }
     }
   }
 

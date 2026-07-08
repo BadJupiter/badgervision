@@ -218,6 +218,9 @@ function goBack() {
 ════════════════════════════════════════════ */
 
 let scopedMachines = MACHINES;
+let filteredMachines = MACHINES;
+let currentPage = 1;
+const PAGE_SIZE = 25;
 let CUSTOMER_NAMES = {};
 
 function populateCustomerPicker() {
@@ -235,15 +238,18 @@ function populateCustomerPicker() {
 
 const RECENT_CUTOFF_DAYS = 30;
 
+let showUnactivated = true;
+
 function applyCustomerFilter() {
   const custId = document.getElementById('customer-picker').value;
   scopedMachines = custId ? MACHINES.filter(m => m.customer_id === custId) : MACHINES;
 
-  const total      = scopedMachines.length;
-  const verified   = scopedMachines.filter(m => m.has_verified_specs).length;
-  const withReports = scopedMachines.filter(m => m.service_report_count > 0).length;
+  const activated  = scopedMachines.filter(m => m.activated !== false);
+  const total      = activated.length;
+  const verified   = activated.filter(m => m.has_verified_specs).length;
+  const withReports = activated.filter(m => m.service_report_count > 0).length;
   const cutoff     = new Date(); cutoff.setDate(cutoff.getDate() - RECENT_CUTOFF_DAYS);
-  const recent     = scopedMachines.filter(m => m.last_service_date && new Date(m.last_service_date) >= cutoff).length;
+  const recent     = activated.filter(m => m.last_service_date && new Date(m.last_service_date) >= cutoff).length;
   const pending    = total - verified;
 
   document.getElementById('stat-total').textContent      = total;
@@ -255,7 +261,7 @@ function applyCustomerFilter() {
     document.getElementById('stat-total-meta').textContent    = CUSTOMER_NAMES[custId];
     document.getElementById('stat-verified-meta').textContent = pending + ' pending verification';
   } else {
-    const custCount = new Set(MACHINES.map(m => m.customer_id)).size;
+    const custCount = new Set(activated.map(m => m.customer_id)).size;
     document.getElementById('stat-total-meta').textContent    = 'Across ' + custCount + ' customer accounts';
     document.getElementById('stat-verified-meta').textContent = pending + ' pending verification';
   }
@@ -265,15 +271,58 @@ function applyCustomerFilter() {
     : 'All Machines';
 
   document.getElementById('table-filter').value = '';
-  renderFleetTable(scopedMachines);
+  filteredMachines = scopedMachines;
+  currentPage = 1;
+  renderFleetTable();
 }
 
-function renderFleetTable(machines) {
-  const tbody = document.getElementById('fleet-tbody');
-  document.getElementById('table-count').textContent = machines.length;
+function toggleUnactivated() {
+  showUnactivated = !showUnactivated;
+  const btn = document.getElementById('btn-toggle-unactivated');
+  btn.textContent = showUnactivated ? 'Hide Unactivated' : 'Show Unactivated';
+  currentPage = 1;
+  renderFleetTable();
+}
 
-  // Mobile list
-  document.getElementById('fleet-mobile-list').innerHTML = machines.map(m => `
+function goToPage(p) {
+  currentPage = p;
+  renderFleetTable();
+}
+
+function renderFleetTable() {
+  const tbody = document.getElementById('fleet-tbody');
+  const machines = filteredMachines;
+  const activated   = machines.filter(m => m.activated !== false);
+  const unactivated = machines.filter(m => m.activated === false);
+
+  document.getElementById('table-count').textContent = activated.length +
+    (unactivated.length ? ` + ${unactivated.length} pending` : '');
+
+  const unactivatedToggleEl = document.getElementById('btn-toggle-unactivated');
+  if (unactivatedToggleEl) {
+    unactivatedToggleEl.style.display = unactivated.length ? '' : 'none';
+    unactivatedToggleEl.textContent = showUnactivated ? 'Hide Unactivated' : 'Show Unactivated';
+  }
+
+  // Build the full ordered list (activated first, then unactivated if shown)
+  const allRows = [...activated, ...(showUnactivated ? unactivated : [])];
+  const totalPages = Math.max(1, Math.ceil(allRows.length / PAGE_SIZE));
+  if (currentPage > totalPages) currentPage = totalPages;
+  const pageRows = allRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  // Mobile: page slice
+  document.getElementById('fleet-mobile-list').innerHTML = pageRows.map(m => m.activated === false ? `
+    <div class="fleet-mobile-item unactivated">
+      <div class="fmi-main">
+        <div class="fmi-location">${m.location_name || '—'}</div>
+        <div class="fmi-meta">${m.city || ''}, ${m.state || ''} · Not yet activated</div>
+      </div>
+      <div class="fmi-right">
+        <span class="machine-id">${m.slug}</span>
+        <span class="unactivated-badge">Pending</span>
+      </div>
+    </div>
+  ` : `
     <div class="fleet-mobile-item" onclick="showPage('detail','${m.jp_machine_id}')">
       <div class="fmi-main">
         <div class="fmi-location">${m.location_name}</div>
@@ -285,7 +334,19 @@ function renderFleetTable(machines) {
       </div>
     </div>
   `).join('');
-  tbody.innerHTML = machines.map(m => `
+
+  // Desktop: page slice
+  tbody.innerHTML = pageRows.map(m => m.activated === false ? `
+    <tr class="unactivated-row">
+      <td><span class="machine-id unactivated-id">${m.slug}</span></td>
+      <td>—</td>
+      <td style="font-weight:600;color:var(--gray4)">${m.location_name || '—'}</td>
+      <td style="font-size:12px;color:var(--gray4)">${m.city || ''}, ${m.state || ''}</td>
+      <td colspan="4" style="color:var(--gray4);font-style:italic;font-size:12px">Not yet activated — awaiting technician scan</td>
+      <td><span class="unactivated-badge">Pending</span></td>
+      <td></td>
+    </tr>
+  ` : `
     <tr onclick="showPage('detail','${m.jp_machine_id}')">
       <td><span class="machine-id">${m.jp_machine_id}</span></td>
       <td class="mono" style="font-size:12px;color:var(--gray5)">${m.customer_machine_id || '—'}</td>
@@ -311,6 +372,34 @@ function renderFleetTable(machines) {
       <td style="color:var(--gray3);font-size:16px">›</td>
     </tr>
   `).join('');
+
+  // Pagination controls
+  const start = (currentPage - 1) * PAGE_SIZE + 1;
+  const end   = Math.min(currentPage * PAGE_SIZE, allRows.length);
+  document.getElementById('pagination-label').textContent =
+    allRows.length ? `Showing ${start}–${end} of ${allRows.length}` : 'No results';
+
+  const btns = document.getElementById('pagination-btns');
+  btns.innerHTML = '';
+
+  const addBtn = (label, page, active, disabled) => {
+    const b = document.createElement('button');
+    b.className = 'page-btn' + (active ? ' active' : '');
+    b.textContent = label;
+    b.disabled = disabled;
+    if (!disabled) b.onclick = () => goToPage(page);
+    btns.appendChild(b);
+  };
+
+  addBtn('‹', currentPage - 1, false, currentPage === 1);
+
+  // Show up to 5 page numbers centred on current page
+  let lo = Math.max(1, currentPage - 2);
+  let hi = Math.min(totalPages, lo + 4);
+  lo = Math.max(1, hi - 4);
+  for (let p = lo; p <= hi; p++) addBtn(p, p, p === currentPage, false);
+
+  addBtn('›', currentPage + 1, false, currentPage === totalPages);
 }
 
 function machineMatchesTerms(m, rawQuery) {
@@ -324,9 +413,10 @@ function machineMatchesTerms(m, rawQuery) {
 function filterTable() {
   const q = document.getElementById('table-filter').value;
   const terms = q.split(',').map(t => t.trim()).filter(t => t.length > 0);
-  const filtered = terms.length === 0 ? scopedMachines
+  filteredMachines = terms.length === 0 ? scopedMachines
     : scopedMachines.filter(m => machineMatchesTerms(m, q));
-  renderFleetTable(filtered);
+  currentPage = 1;
+  renderFleetTable();
 }
 
 /* ═══════════════════════════════════════════
