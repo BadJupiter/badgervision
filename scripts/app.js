@@ -144,7 +144,7 @@ async function enterApp() {
 
 function hasIPSAccess() {
   const roles = userProfile?.biz_roles || [];
-  return roles.includes('admin');
+  return roles.includes('admin') || roles.includes('customer');
 }
 
 function showLoginError(msg) {

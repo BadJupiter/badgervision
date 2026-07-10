@@ -98,8 +98,9 @@ function transformAPIResponse(data) {
 async function loadFleetData() {
   await loadLocalConfig();
   try {
-    const headers = {};
-    if (typeof userToken !== 'undefined' && userToken) headers['X-User-Token'] = userToken;
+    const userUuid = userProfile?.user?.uuid;
+if (!userUuid) throw new Error('No user UUID available');
+    const headers = { 'X-User-UUID': userUuid };
     const res = await fetch(API_BASE, { headers });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
