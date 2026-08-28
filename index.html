@@ -242,8 +242,18 @@
           <div class="machine-header-sub" id="detail-address"></div>
         </div>
         <div class="machine-header-status" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
-          <span class="status-badge active"><span class="status-dot"></span>Active</span>
+          <span class="status-badge active" id="detail-status-badge"><span class="status-dot"></span>Active</span>
           <span id="detail-verified-banner" style="font-size:11px;color:rgba(255,255,255,0.45);font-family:'IBM Plex Sans',monospace;letter-spacing:0.03em"></span>
+        </div>
+      </div>
+
+      <!-- Shown only for units that have not been activated by a technician scan -->
+      <div class="pending-banner" id="detail-pending-banner" hidden>
+        <div class="pending-banner-mark">PENDING ACTIVATION</div>
+        <div class="pending-banner-body">
+          <strong>This unit has not been scanned or verified by a technician.</strong>
+          Equipment specifications below are not on file yet. Service reports already
+          received for this location are listed and can be opened normally.
         </div>
       </div>
 

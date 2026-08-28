@@ -330,7 +330,7 @@ function renderFleetTable() {
 
   // Mobile: page slice
   document.getElementById('fleet-mobile-list').innerHTML = pageRows.map(m => m.activated === false ? `
-    <div class="fleet-mobile-item unactivated">
+    <div class="fleet-mobile-item unactivated" onclick="showPage('detail','${m.slug}')">
       <div class="fmi-main">
         <div class="fmi-location">${m.location_name || '—'}</div>
         <div class="fmi-meta">${m.city || ''}, ${m.state || ''} · Not yet activated</div>
@@ -338,6 +338,7 @@ function renderFleetTable() {
       <div class="fmi-right">
         <span class="machine-id">${m.slug}</span>
         <span class="unactivated-badge">Pending</span>
+        <span class="fmi-reports">${m.service_report_count || 0} report${(m.service_report_count || 0) !== 1 ? 's' : ''}</span>
       </div>
     </div>
   ` : `
@@ -355,13 +356,20 @@ function renderFleetTable() {
 
   // Desktop: page slice
   tbody.innerHTML = pageRows.map(m => m.activated === false ? `
-    <tr class="unactivated-row">
+    <tr class="unactivated-row" onclick="showPage('detail','${m.slug}')">
       <td><span class="machine-id unactivated-id">${m.slug}</span></td>
       <td>—</td>
       <td style="font-weight:600;color:var(--gray4)">${m.location_name || '—'}</td>
       <td style="font-size:12px;color:var(--gray4)">${m.city || ''}, ${m.state || ''}</td>
-      <td colspan="4" style="color:var(--gray4);font-style:italic;font-size:12px">Not yet activated — awaiting technician scan</td>
-      <td><span class="unactivated-badge">Pending</span></td>
+      <td colspan="2" style="color:var(--gray4);font-style:italic;font-size:12px">Not yet activated — awaiting technician scan</td>
+      <td>
+        <span class="status-badge pending">
+          <span class="status-dot"></span>
+          Pending
+        </span>
+      </td>
+      <td style="text-align:center"><span style="color:var(--gray3);font-size:14px" title="Unverified">○</span></td>
+      <td><span class="report-count">${m.service_report_count || 0}</span></td>
       <td></td>
     </tr>
   ` : `
@@ -518,48 +526,66 @@ function renderMachineDetail(machineId) {
   const m = MACHINES.find(x => x.jp_machine_id === machineId);
   if (!m) return;
 
+  const pending = m.activated === false;
+
   document.getElementById('detail-machine-id').textContent = m.jp_machine_id;
-  document.getElementById('detail-location-name').textContent = m.location_name;
+  document.getElementById('detail-location-name').textContent = m.location_name || '—';
   document.getElementById('detail-address').textContent =
-    `${m.address_1}, ${m.city}, ${m.state} ${m.zip} · ${m.customer_name}`;
+    [[m.address_1, m.city, m.state].filter(Boolean).join(', '), m.zip]
+      .filter(Boolean).join(' ') + (m.customer_name ? ` · ${m.customer_name}` : '');
+
+  // Status badge mirrors the fleet table: green ACTIVE / orange PENDING
+  const badge = document.getElementById('detail-status-badge');
+  badge.className = 'status-badge ' + (pending ? 'pending' : 'active');
+  badge.innerHTML = `<span class="status-dot"></span>${pending ? 'Pending' : 'Active'}`;
+
+  // Banner + watermark, so an empty spec panel can't read as "no data recorded"
+  document.getElementById('detail-pending-banner').hidden = !pending;
+  document.querySelector('.info-panels').classList.toggle('pending-specs', pending);
 
   const verifiedBanner = document.getElementById('detail-verified-banner');
-  verifiedBanner.textContent = m.last_verified_at
-    ? '✓ Verified ' + fmtDate(m.last_verified_at)
-    : '';
+  verifiedBanner.textContent = pending
+    ? 'Awaiting technician scan'
+    : (m.last_verified_at ? '✓ Verified ' + fmtDate(m.last_verified_at) : '');
+
+  // For a pending unit nothing below identity has been captured yet. Show the
+  // same rows so the layout is recognisable, but say plainly why they're empty
+  // rather than rendering bare dashes (or "undefined").
+  const NOT_CAPTURED = '<span class="pending-value">Not captured yet</span>';
+  const val = v => pending ? NOT_CAPTURED : v;
 
   document.getElementById('rows-identity').innerHTML = infoRows([
     ['Machine ID',  `<span class="machine-id">${m.jp_machine_id}</span>`],
     ['Facility ID', m.customer_machine_id || '—'],
-    ['Customer',    m.customer_name]
+    ['Customer',    m.customer_name || '—']
   ]);
 
   document.getElementById('rows-genset').innerHTML = infoRows([
-    ['Make',      m.genset_make],
-    ['Model',     m.genset_model],
-    ['Serial #',  m.genset_serial || '—'],
-    ['Capacity',  m.genset_kw + ' kW'],
-    ['Fuel Type', m.fuel_type || '—'],
-    ['Tank Size', m.fuel_tank_size ? m.fuel_tank_size + ' gal' : '—']
+    ['Make',      val(m.genset_make || '—')],
+    ['Model',     val(m.genset_model || '—')],
+    ['Serial #',  val(m.genset_serial || '—')],
+    ['Capacity',  val(m.genset_kw ? m.genset_kw + ' kW' : '—')],
+    ['Fuel Type', val(m.fuel_type || '—')],
+    ['Tank Size', val(m.fuel_tank_size ? m.fuel_tank_size + ' gal' : '—')]
   ]);
 
   document.getElementById('rows-engine').innerHTML = infoRows([
-    ['Make',     m.engine_make],
-    ['Model',    m.engine_model],
-    ['Serial #', m.engine_serial || '—']
+    ['Make',     val(m.engine_make || '—')],
+    ['Model',    val(m.engine_model || '—')],
+    ['Serial #', val(m.engine_serial || '—')]
   ]);
 
   document.getElementById('rows-battery').innerHTML = infoRows([
-    ['Date', m.battery_size || '—']
+    ['Date', val(m.battery_size || '—')]
   ]);
 
   const c = m.contacts || {};
   document.getElementById('rows-contacts').innerHTML = infoRows([
-    ['ATOM Contact', c.atom || '—'],
-    ['ATOM Cell',    c.atom_cell ? `<a href="tel:${c.atom_cell}" style="color:var(--navy3);text-decoration:none">${c.atom_cell}</a>` : '—'],
-    ['ATOM Email',   c.atom_email ? `<a href="mailto:${c.atom_email}" style="color:var(--navy3);text-decoration:none;font-size:12px">${c.atom_email}</a>` : '—'],
-    ['BioMed',       c.biomed || '—'],
-    ['BioMed Cell',  c.biomed_cell ? `<a href="tel:${c.biomed_cell}" style="color:var(--navy3);text-decoration:none">${c.biomed_cell}</a>` : '—']
+    ['ATOM Contact', val(c.atom || '—')],
+    ['ATOM Cell',    val(c.atom_cell ? `<a href="tel:${c.atom_cell}" style="color:var(--navy3);text-decoration:none">${c.atom_cell}</a>` : '—')],
+    ['ATOM Email',   val(c.atom_email ? `<a href="mailto:${c.atom_email}" style="color:var(--navy3);text-decoration:none;font-size:12px">${c.atom_email}</a>` : '—')],
+    ['BioMed',       val(c.biomed || '—')],
+    ['BioMed Cell',  val(c.biomed_cell ? `<a href="tel:${c.biomed_cell}" style="color:var(--navy3);text-decoration:none">${c.biomed_cell}</a>` : '—')]
   ]);
 
   const reports = SERVICE_REPORTS[machineId] || [];

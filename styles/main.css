@@ -567,6 +567,13 @@ html, body {
   color: var(--gray4);
 }
 
+/* Pending = QR issued, unit not yet activated by a technician scan */
+.status-badge.pending {
+  background: #fff3e8;
+  color: var(--amber2);
+  border: 1px solid #f5c396;
+}
+
 .status-dot {
   width: 6px;
   height: 6px;
@@ -1537,13 +1544,85 @@ html, body {
   }
 }
 
-/* ── Unactivated units ── */
-.unactivated-row {
-  opacity: 0.55;
-  cursor: default;
-  pointer-events: none;
+/* ── Pending activation (detail page) ── */
+.pending-banner {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin: 0 0 18px;
+  padding: 16px 20px;
+  background: #fff3e8;
+  border: 1px solid #f5c396;
+  border-left: 6px solid var(--amber2);
+  border-radius: var(--radius);
 }
-.unactivated-row:hover { background: none; }
+.pending-banner[hidden] { display: none; }
+
+.pending-banner-mark {
+  font-size: clamp(18px, 2.4vw, 26px);
+  font-weight: 800;
+  letter-spacing: 0.10em;
+  color: var(--amber2);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.pending-banner-body {
+  flex: 1 1 320px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--gray5);
+}
+.pending-banner-body strong {
+  display: block;
+  color: var(--navy);
+  margin-bottom: 2px;
+}
+
+/* the specs area gets a watermark so an empty panel can't be mistaken
+   for a unit that simply has no data recorded */
+.info-panels.pending-specs { position: relative; }
+
+.info-panels.pending-specs::after {
+  content: "PENDING ACTIVATION";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: rotate(-8deg);
+  font-size: clamp(22px, 4.5vw, 54px);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: rgba(217, 96, 8, 0.12);
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.info-panels.pending-specs .info-panel { opacity: 0.65; }
+.info-panels.pending-specs #panel-identity { opacity: 1; }
+
+.pending-value {
+  color: var(--gray4);
+  font-style: italic;
+  font-size: 12px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pending-banner { animation: none; }
+}
+
+/* ── Unactivated units ── */
+/* Unit data stays faint, but status + report count read at full strength
+   (row-level opacity would fade those too, so grey the cells instead). */
+.unactivated-row {
+  cursor: pointer;
+  color: var(--gray4);
+}
+.unactivated-row > td { color: var(--gray4); }
+.unactivated-row .report-count { color: var(--gray5); }
+.unactivated-row:hover { background: var(--gray1); }
 .unactivated-id {
   color: var(--gray4);
   background: var(--gray2);
@@ -1561,10 +1640,11 @@ html, body {
   padding: 2px 7px;
 }
 .fleet-mobile-item.unactivated {
-  opacity: 0.55;
-  cursor: default;
-  pointer-events: none;
+  cursor: pointer;
+  color: var(--gray4);
 }
+.fleet-mobile-item.unactivated .fmi-location,
+.fleet-mobile-item.unactivated .fmi-meta { color: var(--gray4); }
 .btn-toggle-unactivated {
   font-size: 12px;
   font-weight: 600;

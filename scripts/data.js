@@ -87,7 +87,17 @@ function transformAPIResponse(data) {
           zip:             locData.zip,
           customer_name:   custData.name,
           customer_id:     custId,
+          // Service reports can exist against a QR before a technician activates
+          // the unit, so surface the count (and the reports themselves) anyway.
+          management_status:    'PENDING',
+          has_verified_specs:   false,
+          service_report_count: (unact.reports || []).length,
+          last_service_date:    unact.last_service_date || null,
         });
+
+        if (unact.reports && unact.reports.length > 0) {
+          reports[unact.slug] = unact.reports;
+        }
       }
     }
   }
