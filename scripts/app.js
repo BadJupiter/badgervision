@@ -4,6 +4,16 @@
 const IPS_BIZ_ID   = 'ips';
 const IPS_APP_TOKEN = 'ips-dashboard';
 
+// Per-app policy opt-out (see j2auth README, "The one per-app policy
+// decision"). j2auth's registerBusinessUser() creates a role-less
+// (:User)-[:REGISTERED_FOR]->(:Business) edge after a successful verify.
+// That's right for consumer apps, but Badger Vision is access-gated on
+// biz_roles (see hasIPSAccess) — merely attempting to sign in must not grant
+// membership of the business that gates access. Override the global rather
+// than forking j2auth.js, the same way the feedback dashboards and the admin
+// console do.
+window.registerBusinessUser = () => {};
+
 function showScreen(name, loadingMsg) {
   document.getElementById('screen-loading').style.display = name === 'loading' ? 'flex' : 'none';
   document.getElementById('screen-login').style.display   = name === 'login'   ? 'flex' : 'none';

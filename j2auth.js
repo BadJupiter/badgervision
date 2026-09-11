@@ -1,5 +1,39 @@
 // Jupiter 2 mobile authentication and other API support
 //
+// CANONICAL SOURCE — github.com/BadJupiter/j2auth
+//
+// Every Jupiter app authenticates through this one file. Edit it HERE and
+// distribute; never edit a deployed copy in place. Six copies had quietly
+// forked before this was reconciled (2026-08-12), including a real behavioral
+// split in the verify handler.
+//
+// API surface (globals — this is a classic script, not a module):
+//   j2AuthInit(bizid, apptoken)   resolve the device cookie to a User
+//   authenticateUser()            run the SMS modal; resolves true/false
+//   isAuthenticated, userProfile  post-auth state
+//   getCookie()                   the device token
+//
+// OTP autofill is two mechanisms, not one. iOS fills the code from the
+// autocomplete="one-time-code" attribute on the first code input (in each
+// app's modal markup). Chrome on Android ignores that and needs the WebOTP
+// API below, plus an SMS whose LAST line is "@<host> #<code>" — /auth/
+// appends that from the request's Origin. Both are best-effort; typing the
+// code always works.
+//
+// Requires: a `bootstrap.Modal`-compatible global (real Bootstrap, or the
+// bs-shim.js used by the dashboards), VMasker, and the shared auth-modal
+// markup — the element IDs below are addressed directly.
+//
+// PER-APP POLICY: after a successful verify this calls registerBusinessUser(),
+// which creates a role-less (:User)-[:REGISTERED_FOR]->(:Business) edge. That
+// is right for consumer apps — it's how a guest becomes known to a business —
+// and wrong for admin dashboards, where merely attempting to sign in must not
+// grant membership. Those opt out by overriding the global before any flow
+// runs, rather than by forking this file:
+//
+//     window.registerBusinessUser = () => {};
+
+console.log("j2auth initializing... (top level)");
 
 const DEVICE_COOKIE = "jupiterDeviceID";
 
@@ -17,7 +51,6 @@ let userToken;			// authenticated user token (device cookie)
 let userProfile;
 
 // server URL might get overwritten with a local URL for testing
-// var serverURL = 'https://ec2-18-116-237-20.us-east-2.compute.amazonaws.com';
 var serverURL = 'https://api.badjupiter.cloud';
 
 const apiUserProfile = '/userprofile/';
@@ -25,14 +58,26 @@ const apiAuthMobile = '/auth/';
 const apiAuthRegister = '/register/';
 const apiRegisterBiz = '/register-biz/';
 
+function setCookie(cvalue, exdays) {
+	console.log("set cookie");
+	var d = new Date();
+	d.setTime(d.getTime() + (exdays*24*60*60*1000));
+	var expires = "expires="+ d.toUTCString();
+	document.cookie = DEVICE_COOKIE + "=" + cvalue + ";" + expires + ";path=/";
+}
+
+function deleteCookie() {
+  console.log("delete cookie");
+  document.cookie = `${DEVICE_COOKIE}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+}
+
 function getCookie() {
 	
 	const value = `; ${document.cookie}`;
+//	console.log("COOKIE IS",value);
 	const parts = value.split(`; ${DEVICE_COOKIE}=`);
 	if (parts.length === 2) return parts.pop().split(';').shift();
 }
-
-userToken = getCookie();
 
 // global variable to track authentication status
 
@@ -97,7 +142,7 @@ async function j2AuthInit(bizid,apptok) {
 
 	console.log(`Jupiter 2 authentication init... (app token ${apptok})`)
 
-	bizID = bizid;			// global
+	bizID = bizid;		// global
 	appToken = apptok;	// global
 	
 	if (!bizid || !apptok) {
@@ -105,6 +150,9 @@ async function j2AuthInit(bizid,apptok) {
 		console.error(`need a biz id and an app token to init`);
 		return		
 	}	
+
+	userToken = getCookie();
+//	console.log("GOT A COOKIE?",userToken)
 	
 	await checkLocalConfig();
 
@@ -117,21 +165,14 @@ async function j2AuthInit(bizid,apptok) {
 	}
 }
 
-//	requestAuthenticationCode(phonenumber).then(serverCode => {
-//		if (serverCode) {
-//		// Handle the serverCode
-//		} else {
-//			// Handle the case where no auth code was returned
-//		}
-//	});
-//
-function requestAuthenticationCode(phoneNumber, bizid) {
+function requestAuthenticationCode(phoneNumber) {
+
 	return fetch(serverURL + apiAuthMobile, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 		},
-		body: JSON.stringify({ mobile: phoneNumber, bizid: bizid || bizID })
+		body: JSON.stringify({ mobile: phoneNumber, bizid: bizID })
 	})
 	.then(response => response.json())
 	.then(data => {
@@ -175,6 +216,7 @@ async function verifyAuthenticationCode(userCode) {
 			}
 
 			const responseData = await response.json();
+			
 			isAuthenticated = true;
 			setCookie(newDeviceToken, 30); // 30 days (?)
 			userToken = getCookie();
@@ -183,12 +225,14 @@ async function verifyAuthenticationCode(userCode) {
 
 			console.log("AUTH!", userProfile);
 			return isAuthenticated;
+			
 		} catch (error) {
 			console.error('AUTH VERIFY:', error);
 			isAuthenticated = false;
 			return isAuthenticated;
 		}
 	} else {
+		
 		isAuthenticated = false;
 		return isAuthenticated;
 	}
@@ -213,7 +257,7 @@ function registerBusinessUser() {
 				headers: {
 					'Content-Type': 'application/json',
 				},
-				body: JSON.stringify({ mob: userMobile, bizid: bizID })
+				body: JSON.stringify({ mob: userMobile, bizid: bizID, apptoken: appToken })
 			})
 			.then(response => response.json())
 			.then(data => {
@@ -230,13 +274,174 @@ function registerBusinessUser() {
 	}
 }
 
-function setCookie(cvalue, exdays) {
-	
-	console.log("set cookie");
-	var d = new Date();
-	d.setTime(d.getTime() + (exdays*24*60*60*1000));
-	var expires = "expires="+ d.toUTCString();
 
-	document.cookie = DEVICE_COOKIE + "=" + cvalue + "; " + expires + "; path=/; SameSite=Lax";
+//	NEW FLOW! MUCH CLEANER!
+
+async function authenticateUser() {
+	 
+	 return new Promise((resolve, reject) => {
+		 const authModal = new bootstrap.Modal(document.getElementById("authModal"), {
+		backdrop: "static", // Prevent closing the modal by clicking outside
+	});
+
+	// Elements
+	const phoneInputStep = document.getElementById("authPhoneInput");
+	const codeInputStep = document.getElementById("authCodeInput");
+	const phoneInput = document.getElementById("phone");
+	const sendCodeBtn = document.getElementById("sendCodeBtn");
+	const verifyCodeBtn = document.getElementById("verifyCodeBtn");
+	const codeInputs = document.querySelectorAll(".code-input");
+
+	// Helper Functions
+	const showPhoneStep = () => {
+		phoneInputStep.classList.remove("d-none");
+		codeInputStep.classList.add("d-none");
+		phoneInput.value = "";
+		sendCodeBtn.disabled = true;
+	};
+
+	const showCodeStep = () => {
+		phoneInputStep.classList.add("d-none");
+		codeInputStep.classList.remove("d-none");
+		codeInputs.forEach((input) => (input.value = ""));
+		codeInputs[0].focus();
+		startOtpListener();
+	};
+
+	const collectCode = () => {
+		return Array.from(codeInputs)
+			.map((input) => input.value.trim())
+			.join("");
+	};
+
+	// WebOTP — Chrome on Android only. Feature-detected, so it is a silent
+	// no-op on iOS (which uses the autocomplete attribute) and on desktop.
+	// The listener MUST be aborted when the modal closes: an outstanding
+	// credentials.get() keeps a pending permission request alive and the next
+	// sign-in attempt in the same page then rejects immediately.
+	let otpAbort = null;
+
+	const startOtpListener = () => {
+		if (!("OTPCredential" in window)) return;
+		otpAbort = new AbortController();
+		navigator.credentials
+			.get({ otp: { transport: ["sms"] }, signal: otpAbort.signal })
+			.then((otp) => {
+				if (!otp || !otp.code) return;
+				const digits = String(otp.code).replace(/\D/g, "").slice(0, codeInputs.length);
+				digits.split("").forEach((d, i) => { codeInputs[i].value = d; });
+				verifyCodeBtn.disabled = !areAllInputsFilled();
+				if (digits.length === codeInputs.length) verifyCodeBtn.focus();
+			})
+			.catch(() => { /* aborted, dismissed, or unsupported — never fatal */ });
+	};
+
+	const stopOtpListener = () => {
+		if (otpAbort) { otpAbort.abort(); otpAbort = null; }
+	};
+
+	 VMasker(phoneInput).maskPattern('(999) 999-9999');
+	 phoneInput.addEventListener('input', function() {
+		 var phoneNumber = phoneInput.value;
+		 var phoneNumberPattern = /^\(?([0-9]{3})\)?[-. ]?([0-9]{3})[-. ]?([0-9]{4})$/;  // US phone format
+		 if (phoneNumberPattern.test(phoneNumber)) {
+			 sendCodeBtn.disabled = false;
+		 } else {
+			 sendCodeBtn.disabled = true;
+		 }
+	 });      
+	
+	sendCodeBtn.addEventListener("click", async () => {
+		try {
+			const phoneNumber = phoneInput.value.trim();
+			sendCodeBtn.disabled = true;
+
+			// Call your requestAuthenticationCode() function
+			const serverCode = await requestAuthenticationCode(phoneNumber);
+
+			if (serverCode) {
+				showCodeStep();
+			} else {
+				throw new Error("Failed to get an authentication code");
+			}
+		} catch (error) {
+			alert("Error sending code: " + error.message);
+			sendCodeBtn.disabled = false;
+		}
+	});
+
+	 verifyCodeBtn.disabled = true;
+	 
+	 function areAllInputsFilled() {
+		 return Array.from(codeInputs).every(input => input.value.trim() != '');
+	 }
+	 codeInputs.forEach((input, index) => {
+		 input.addEventListener('input', (e) => {
+	 
+			 const value = e.target.value;	
+			 // Ensure only one character is allowed
+			 if (value.length > 1) {
+				 e.target.value = value.slice(0, 1);
+			 }	
+			 // Move to the next input if there's a value
+			 if (value && index < codeInputs.length - 1) {
+				 codeInputs[index + 1].focus();
+			 }
+			 verifyCodeBtn.disabled = !areAllInputsFilled();
+		 });
+	 
+		 input.addEventListener('keydown', (e) => {
+			 if (e.key === 'Backspace' && !e.target.value && index > 0) {
+				 // Move to the previous input on Backspace if current is empty
+				 codeInputs[index - 1].focus();
+			 }
+		 });
+	 });
+
+	verifyCodeBtn.addEventListener("click", async () => {
+		try {
+			const userCode = collectCode();
+			if (userCode.length !== 4) {
+				alert("Please enter a valid 4-digit code");
+				return;
+			}
+
+			verifyCodeBtn.disabled = true;
+
+			// verifyAuthenticationCode() already sets the cookie, refreshes
+			// userToken and fetches userProfile on success — see its body.
+			// This handler used to repeat all three, costing a second
+			// /userprofile/ round-trip on every sign-in. (Fix originated in
+			// the IPS copy, 2026-01-04; folded in here so every app gets it.)
+			const isAuthenticated = await verifyAuthenticationCode(userCode);
+
+			if (isAuthenticated) {
+
+				stopOtpListener();
+				userToken = getCookie();   // re-read so callers see it immediately
+
+				// Per-app policy — see the header. Deliberately not awaited.
+				registerBusinessUser();
+
+				authModal.hide();
+				resolve(true); // Authentication successful
+			} else {
+				throw new Error("Verification failed");
+			}
+		} catch (error) {
+			alert("Error verifying code: " + error.message);
+			verifyCodeBtn.disabled = false;
+		}
+	});
+
+	// Show the modal and start the flow
+	authModal.show();
+	showPhoneStep();
+
+	// If the modal is closed, reject the promise (optional)
+	document
+		.getElementById("authModal")
+		.addEventListener("hidden.bs.modal", () => { stopOtpListener(); resolve(false); });
+	});
 }
 
