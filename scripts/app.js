@@ -83,6 +83,7 @@ function sendOTP() {
     document.getElementById('btn-verify-otp').classList.remove('hidden');
     document.getElementById('otp-hint').textContent = `Code sent to ${phone}. Check your texts.`;
     document.getElementById('otp0').focus();
+    startOtpListener();
   });
 }
 
@@ -101,7 +102,53 @@ function otpBack(event, idx) {
   }
 }
 
+/* ═══════════════════════════════════════════
+   SMS CODE AUTOFILL (WebOTP)
+════════════════════════════════════════════ */
+// Two mechanisms, not one. iOS fills the code from autocomplete="one-time-code"
+// on #otp0 and needs no script. Chrome on Android ignores that attribute and
+// needs this API, plus an SMS whose LAST line is "@<host> #<code>" — /auth/
+// appends that from the request's Origin. Both are best-effort; typing the
+// code always works.
+//
+// j2auth runs this same listener inside authenticateUser(), but Badger Vision
+// drives requestAuthenticationCode()/verifyAuthenticationCode() from its own
+// login screen and never calls that, so it needs its own copy. Keep it in step
+// with the canonical one.
+//
+// The pending request MUST be aborted whenever we leave the code step. An
+// outstanding credentials.get() keeps a permission request alive, and since
+// signOut() never reloads the page, the next sign-in attempt in the same
+// session would otherwise reject immediately.
+let otpAbort = null;
+
+function startOtpListener() {
+  if (!('OTPCredential' in window)) return;   // iOS, desktop — silent no-op
+  stopOtpListener();                          // never leave two outstanding
+  otpAbort = new AbortController();
+  navigator.credentials
+    .get({ otp: { transport: ['sms'] }, signal: otpAbort.signal })
+    .then(otp => {
+      if (!otp || !otp.code) return;
+      const digits = String(otp.code).replace(/\D/g, '').slice(0, 4);
+      digits.split('').forEach((d, i) => { document.getElementById('otp' + i).value = d; });
+      // Setting .value doesn't fire oninput, so the auto-submit in otpNext()
+      // won't run on its own — do it here.
+      if (digits.length === 4) {
+        verifyOTP();
+      } else if (digits.length > 0) {
+        document.getElementById('otp' + digits.length).focus();
+      }
+    })
+    .catch(() => { /* aborted, dismissed, or unsupported — never fatal */ });
+}
+
+function stopOtpListener() {
+  if (otpAbort) { otpAbort.abort(); otpAbort = null; }
+}
+
 async function verifyOTP() {
+  stopOtpListener();   // we have a code; drop any outstanding SMS request
   const btn = document.getElementById('btn-verify-otp');
   btn.disabled = true;
   btn.textContent = 'VERIFYING…';
@@ -167,10 +214,14 @@ function clearLoginError() {
   document.getElementById('login-error').classList.add('hidden');
 }
 
-function signOut() {
-  // Clear the device cookie
-  document.cookie = 'jupiterDeviceID=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/';
-  isAuthenticated = false;
+async function signOut() {
+  stopOtpListener();
+
+  // j2SignOut() revokes the token in the graph and THEN drops the cookie.
+  // Clearing the cookie here alone (what this used to do) only forgets the
+  // credential on this device — the token stayed valid server-side forever,
+  // so any copy of it still worked.
+  await j2SignOut();
 
   showScreen('login');
   document.getElementById('login-step1').style.display = '';
